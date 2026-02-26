@@ -249,8 +249,8 @@ function M.picker(opts)
 			sorter = conf.generic_sorter(opts),
 			push_cursor_on_edit = true,
 			attach_mappings = function(_, map)
-				if opts.groups then
-					map("n", "<C-l>", function()
+				if opts.config then
+					map({ "n", "i" }, "<C-b>", function()
 						require("telescope-wayland.pickers.group").picker(opts)
 					end)
 				end
