@@ -221,7 +221,12 @@ function M.collect_results(source, filename, results)
 	return results
 end
 
-function M.picker(opts)
+---@param opts telescope-wayland.opts
+---@param name string
+function M.picker(opts, name)
+	if name then
+		opts.sources = require("telescope-wayland").resolve_sources(opts, name)
+	end
 	opts.sources = opts.sources or { vim.api.nvim_get_current_buf() }
 
 	local results = {}
@@ -238,12 +243,12 @@ function M.picker(opts)
 		M.collect_results(source, filename, results)
 	end
 
-	return pickers
+	pickers
 		.new(opts, {
 			prompt_title = "Wayland protocol",
 			finder = finders.new_table({
 				results = results,
-				entry_maker = opts.entry_maker or M.gen_entry(opts),
+				entry_maker = M.gen_entry(opts),
 			}),
 			previewer = conf.grep_previewer(opts),
 			sorter = conf.generic_sorter(opts),

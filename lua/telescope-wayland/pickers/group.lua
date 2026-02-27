@@ -11,7 +11,7 @@ function M.picker(opts)
 		.new(opts, {
 			prompt_title = "Wayland Protocol Group",
 			finder = finders.new_table({
-				results = vim.iter(pairs(opts.config.groups))
+				results = vim.iter(pairs(require("telescope-wayland").resolve_config(opts).groups))
 					:map(function(key)
 						return key
 					end)
@@ -21,8 +21,7 @@ function M.picker(opts)
 			attach_mappings = function(_)
 				action_set.select:replace(function(_, _) ---@diagnostic disable-line:undefined-field
 					local name = action_state.get_selected_entry()[1]
-					opts.sources = require("telescope-wayland").resolve_sources(opts.config, name)
-					require("telescope-wayland.pickers.protocol").picker(opts)
+					require("telescope-wayland.pickers.protocol").picker(opts, name)
 				end)
 				return true
 			end,
