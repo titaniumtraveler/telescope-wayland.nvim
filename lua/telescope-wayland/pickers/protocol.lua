@@ -222,7 +222,7 @@ function M.collect_results(source, filename, results)
 end
 
 ---@param opts telescope-wayland.opts
----@param name integer | string
+---@param name (integer | string)?
 function M.picker(opts, name)
 	if name then
 		opts.sources = require("telescope-wayland").resolve_sources(opts, name)
@@ -254,11 +254,12 @@ function M.picker(opts, name)
 			sorter = conf.generic_sorter(opts),
 			push_cursor_on_edit = true,
 			attach_mappings = function(_, map)
-				if opts.config then
-					map({ "n", "i" }, "<C-b>", function()
-						require("telescope-wayland.pickers.group").picker(opts)
-					end)
-				end
+				local opts = require("telescope-wayland").resolve_opts(opts) ---@diagnostic disable-line:redefined-local
+				---@cast opts telescope-wayland.opts
+
+				map({ "n", "i" }, "<C-b>", function()
+					require("telescope-wayland.pickers.group").picker(opts)
+				end)
 
 				return true
 			end,
