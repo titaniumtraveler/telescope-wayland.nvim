@@ -222,7 +222,7 @@ function M.collect_results(source, filename, results)
 end
 
 ---@param opts telescope-wayland.opts
----@param name string
+---@param name integer | string
 function M.picker(opts, name)
 	if name then
 		opts.sources = require("telescope-wayland").resolve_sources(opts, name)

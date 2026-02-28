@@ -4,14 +4,24 @@ local M = {}
 ---@field groups table<string | integer,telescope-wayland.config.group>?
 ---@field default (string | integer)?
 
+---@class telescope-wayland.config.resolved
+---@field groups table<string | integer,telescope-wayland.config.group>
+---@field default (string | integer)?
+
 ---@class telescope-wayland.config.group: string[]
 ---@field sources (string | integer)[]
 
----@class telescope-wayland.opts
+---@class telescope-wayland.opts.resolved
+---@field dir string
+---@field sources (string | integer)[]?
+---@field default (integer | string | boolean)?
+---@field config telescope-wayland.config.resolved
+
+---@class telescope-wayland.opts: telescope-wayland.opts.resolved
 ---@field dir string?
 ---@field sources (string | integer)[]?
 ---@field default (boolean | integer | string)?
----@field config (string | telescope-wayland.config | fun(config_path: string): telescope-wayland.config)?
+---@field config (string | telescope-wayland.config | fun(config_path: string, opts: telescope-wayland.opts): telescope-wayland.config)?
 ---@field include_default_config boolean?
 
 ---@param dir string
@@ -32,16 +42,13 @@ function M.load_config_from_path(opts, path)
 	return loadfile(path)()
 end
 
----@type telescope-wayland.opts
-M.default_opts = {}
+---@type telescope-wayland.opts.resolved
+M.default_opts = { sources = {}, dir = vim.fn.getcwd(-1, -1), config = { groups = {} } }
 
 ---@param opts telescope-wayland.opts
 ---@return boolean
-local function should_include_default_config(opts)
-	if
-		not (type(opts.include_default_config) == "boolean" and not opts.include_default_config)
-		and M.default_opts.config
-	then
+local function should_include_default(opts)
+	if not (type(opts.include_default_config) == "boolean" and not opts.include_default_config) then
 		return true
 	else
 		return false
@@ -49,11 +56,16 @@ local function should_include_default_config(opts)
 end
 
 ---@param opts telescope-wayland.opts
----@return telescope-wayland.config
-function M.resolve_config(opts)
-	opts = opts or {}
+---@return telescope-wayland.opts.resolved
+---@return (integer | string)?
+function M.resolve_opts(opts)
+	local include_default = should_include_default(opts)
 
-	local dir = opts.dir or vim.fn.getcwd(-1, -1)
+	local dir = opts.dir
+	if include_default then
+		dir = dir or M.default_opts.dir
+	end
+	dir = dir or vim.fn.getcwd(-1, -1)
 
 	local config = (function()
 		local config = opts.config
@@ -61,13 +73,22 @@ function M.resolve_config(opts)
 		if type(config) == "table" then
 			return config
 		elseif type(config) == "function" then
-			return config(M.config_path(dir))
+			return config(M.config_path(dir), opts)
 		elseif not config or type(config) == "string" then
 			return M.load_config_from_path(opts, config)
 		end
 	end)() or { groups = {} }
 
-	if should_include_default_config(opts) then
+	---@type telescope-wayland.config.resolved
+	local config = { ---@diagnostic disable-line:redefined-local
+		default = config.default,
+		groups = config.groups or {},
+	}
+	if include_default then
+		config.default = config.default or M.default_opts.config.default
+	end
+
+	if include_default then
 		for name, group in pairs(M.default_opts.config.groups) do
 			if not config.groups[name] then
 				config.groups[name] = group
@@ -75,22 +96,46 @@ function M.resolve_config(opts)
 		end
 	end
 
-	return config
+	local opts_default = opts.default
+	if include_default and type(opts_default) == "nil" then
+		opts_default = M.default_opts.default
+	end
+
+	local default = opts_default
+	if type(default) == "boolean" then
+		if default then
+			default = config.default
+		else
+			default = nil
+		end
+	end
+
+	---@type telescope-wayland.opts.resolved
+	local resolved = {
+		dir = dir,
+		default = opts_default,
+		config = config,
+	}
+	return resolved, default
 end
 
 ---@param opts telescope-wayland.opts
----@param group_name string?
+---@param group_name (integer | string)?
 ---@return (integer | string)[]
 function M.resolve_sources(opts, group_name)
-	local dir = opts.dir or vim.fn.getcwd(-1, -1)
-	local group = M.resolve_config(opts).groups[group_name]
+	local opts, default = M.resolve_opts(opts) ---@diagnostic disable-line:redefined-local
+	group_name = group_name or default
+	local group = opts.config and opts.config.groups and opts.config.groups[group_name]
+	if not group then
+		return {}
+	end
 
 	if not group.sources then
 		group.sources = {}
 		for k, file_name in pairs(group) do
 			if type(k) == "number" then
 				if string.sub(file_name, 1, 1) ~= "/" then
-					file_name = vim.fs.joinpath(dir, file_name)
+					file_name = vim.fs.joinpath(opts.dir, file_name)
 				end
 				local bufnr = vim.fn.bufadd(file_name)
 				vim.fn.bufload(bufnr)
@@ -120,19 +165,9 @@ end
 
 ---@param opts telescope-wayland.opts
 function M.ui(opts)
-	local config = M.resolve_config(opts)
+	local opts, default = M.resolve_opts(opts) ---@diagnostic disable-line:redefined-local
 
-	local default = opts.default
-	if type(default) == "nil" and should_include_default_config(opts) then
-		default = M.default_opts.default
-	end
-	if default == true then
-		default = config.default or "default"
-	end
-
-	---@cast default string?
-
-	opts.config = config
+	---@cast opts telescope-wayland.opts
 	if default then
 		require("telescope-wayland.pickers.protocol").picker(opts, default)
 	else
@@ -142,7 +177,7 @@ end
 
 ---@param opts telescope-wayland.opts
 function M.setup(opts)
-	M.default_opts = opts
+	M.default_opts = M.resolve_opts(opts)
 end
 
 return M

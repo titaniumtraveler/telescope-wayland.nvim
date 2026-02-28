@@ -6,12 +6,13 @@ local finders = require("telescope.finders")
 local pickers = require("telescope.pickers")
 local conf = require("telescope.config").values
 
+---@param opts telescope-wayland.opts
 function M.picker(opts)
-	return pickers
+	pickers
 		.new(opts, {
 			prompt_title = "Wayland Protocol Group",
 			finder = finders.new_table({
-				results = vim.iter(pairs(require("telescope-wayland").resolve_config(opts).groups))
+				results = vim.iter(pairs(require("telescope-wayland").resolve_opts(opts).config.groups))
 					:map(function(key)
 						return key
 					end)
