@@ -1,7 +1,7 @@
 local M = {}
 
 ---@class telescope-wayland.config
----@field groups table<string | integer,telescope-wayland.config.group>
+---@field groups table<string | integer,telescope-wayland.config.group>?
 ---@field default (string | integer)?
 
 ---@class telescope-wayland.config.group: string[]
@@ -9,9 +9,10 @@ local M = {}
 
 ---@class telescope-wayland.opts
 ---@field dir string?
----@field sources (string | integer)[]
+---@field sources (string | integer)[]?
 ---@field default (boolean | integer | string)?
 ---@field config (string | telescope-wayland.config | fun(config_path: string): telescope-wayland.config)?
+---@field include_default_config boolean?
 
 ---@param dir string
 function M.config_path(dir)
@@ -20,11 +21,31 @@ end
 
 ---@param opts telescope-wayland.opts
 ---@param path string?
----@return telescope-wayland.config
+---@return telescope-wayland.config?
 function M.load_config_from_path(opts, path)
 	path = path or M.config_path(opts.dir or vim.fn.getcwd(-1, -1))
 
+	if not vim.uv.fs_stat(path) then
+		return nil
+	end
+
 	return loadfile(path)()
+end
+
+---@type telescope-wayland.opts
+M.default_opts = {}
+
+---@param opts telescope-wayland.opts
+---@return boolean
+local function should_include_default_config(opts)
+	if
+		not (type(opts.include_default_config) == "boolean" and not opts.include_default_config)
+		and M.default_opts.config
+	then
+		return true
+	else
+		return false
+	end
 end
 
 ---@param opts telescope-wayland.opts
@@ -34,17 +55,27 @@ function M.resolve_config(opts)
 
 	local dir = opts.dir or vim.fn.getcwd(-1, -1)
 
-	local config = opts.config
+	local config = (function()
+		local config = opts.config
 
-	if type(config) == "table" then
-		return config
-	elseif type(config) == "function" then
-		return config(M.config_path(dir))
-	elseif not config or type(config) == "string" then
-		return M.load_config_from_path(opts, config)
+		if type(config) == "table" then
+			return config
+		elseif type(config) == "function" then
+			return config(M.config_path(dir))
+		elseif not config or type(config) == "string" then
+			return M.load_config_from_path(opts, config)
+		end
+	end)() or { groups = {} }
+
+	if should_include_default_config(opts) then
+		for name, group in pairs(M.default_opts.config.groups) do
+			if not config.groups[name] then
+				config.groups[name] = group
+			end
+		end
 	end
 
-	error("failed to resolve config")
+	return config
 end
 
 ---@param opts telescope-wayland.opts
@@ -92,6 +123,9 @@ function M.ui(opts)
 	local config = M.resolve_config(opts)
 
 	local default = opts.default
+	if type(default) == "nil" and should_include_default_config(opts) then
+		default = M.default_opts.default
+	end
 	if default == true then
 		default = config.default or "default"
 	end
@@ -104,6 +138,11 @@ function M.ui(opts)
 	else
 		require("telescope-wayland.pickers.group").picker(opts)
 	end
+end
+
+---@param opts telescope-wayland.opts
+function M.setup(opts)
+	M.default_opts = opts
 end
 
 return M
