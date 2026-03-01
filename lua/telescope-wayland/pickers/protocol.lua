@@ -96,16 +96,16 @@ function M.gen_entry(opts)
       local protocol, interface, item = "", "", ""
 
       if entry.protocol then
-        protocol = string.format("protocol:%s", entry.protocol)
+        protocol = string.format("%s:%s", entry.kind, entry.protocol)
       end
       if entry.interface then
-        interface = string.format("::interface:%s", entry.interface)
+        interface = string.format("::%s", entry.interface)
       end
       if entry.item then
-        item = string.format(".%s:%s()", entry.item_kind, entry.item)
+        item = string.format(".%s()", entry.item)
       end
 
-      entry.ordinal = string.format("%s%s%s", protocol, interface, item)
+      entry.ordinal = protocol .. interface .. item
     end
 
     entry.display = display
@@ -259,6 +259,61 @@ function M.collect_results(source, filename, cb)
   end
 end
 
+---@param entry telescope-wayland.entry
+---@param base_url string
+---@return string?
+function M.entry_url(entry, base_url)
+  local url = entry and entry.filename and vim.fs.basename(entry.filename)
+  if not url then
+    return
+  end
+
+  if vim.endswith(url, ".xml") then
+    url = url:sub(1, -5)
+  end
+
+  url = base_url .. url
+
+  if entry.interface then
+    url = url .. "#" .. entry.interface
+  end
+
+  if entry.item then
+    url = url .. ":" .. entry.item_kind .. ":" .. entry.item
+  end
+
+  return url
+end
+
+---@param entry telescope-wayland.entry
+---@return string
+function M.entry_name(entry)
+  ---@type string
+  local protocol, interface, item = "", "", ""
+
+  if entry.protocol then
+    protocol = string.format("%s", entry.protocol)
+  end
+  if entry.interface then
+    interface = string.format("::%s", entry.interface)
+  end
+  if entry.item then
+    item = string.format(".%s()", entry.item)
+  end
+
+  return protocol .. interface .. item
+end
+
+---@param entry telescope-wayland.entry
+---@param base_url string
+---@return string?
+function M.entry_ref(entry, base_url)
+  local name, url = M.entry_name(entry), M.entry_url(entry, base_url)
+  if name and url then
+    return string.format("[`%s`](%s)", name, url)
+  end
+end
+
 ---@param opts telescope-wayland.opts
 ---@param name (integer | string)?
 function M.picker(opts, name)
@@ -338,6 +393,30 @@ function M.picker(opts, name)
 
         map({ "n", "i" }, "<C-b>", function()
           require("telescope-wayland.pickers.group").picker(opts)
+        end)
+
+        map({ "n", "i" }, "<C-o>", function()
+          ---@type telescope-wayland.entry.display?
+          local entry = action_state.get_selected_entry()
+          if not entry then
+            return
+          end
+
+          local url = M.entry_url(entry, opts.base_url)
+          if not url then
+            return
+          end
+
+          vim.ui.open(url)
+        end)
+
+        map({ "n", "i" }, "<C-c>", function()
+          ---@type telescope-wayland.entry.display?
+          local entry = action_state.get_selected_entry()
+          if not entry then
+            return
+          end
+          vim.fn.setreg("+", M.entry_ref(entry, opts.base_url))
         end)
 
         return true
