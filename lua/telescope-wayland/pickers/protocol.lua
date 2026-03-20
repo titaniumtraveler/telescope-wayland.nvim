@@ -96,7 +96,7 @@ function M.gen_entry(opts)
       local protocol, interface, item = "", "", ""
 
       if entry.protocol then
-        protocol = string.format("%s:%s", entry.kind, entry.protocol)
+        protocol = string.format("@%s=%s", entry.kind, entry.protocol)
       end
       if entry.interface then
         interface = string.format("::%s", entry.interface)
