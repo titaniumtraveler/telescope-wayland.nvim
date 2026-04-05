@@ -57,3 +57,15 @@
     )
   )
 )
+
+(element
+  (EmptyElemTag
+    (Name) @arg
+    (#any-of?  @arg "arg" "entry")
+    (#set! kind "arg")
+    (Attribute
+      (Name)     @arg_name_key (#eq?     @arg_name_key "name")
+      (AttValue) @arg_name_val (#offset! @arg_name_val 0 1 0 -1)
+    )
+  )
+)

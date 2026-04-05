@@ -33,6 +33,7 @@ api.nvim_set_hl(0, "wayland_interface", { fg = "#3B82F6" })
 api.nvim_set_hl(0, "wayland_request", { fg = "#EC4899" })
 api.nvim_set_hl(0, "wayland_event", { fg = "#10B981" })
 api.nvim_set_hl(0, "wayland_enum", { fg = "#F97316" })
+api.nvim_set_hl(0, "wayland_arg", { link = "Identifier" })
 
 M.treesitter_type_highlight = {
   ["protocol"] = "wayland_protocol",
@@ -40,6 +41,7 @@ M.treesitter_type_highlight = {
   ["request"] = "wayland_request",
   ["event"] = "wayland_event",
   ["enum"] = "wayland_enum",
+  ["arg"] = "wayland_arg",
 }
 
 function M.gen_entry(opts)
@@ -73,7 +75,11 @@ function M.gen_entry(opts)
 
     if entry.item then
       columns[#columns][1] = columns[#columns][1] .. "."
-      columns[#columns + 1] = { entry.item .. "()", type_highlight[entry.kind] }
+      columns[#columns + 1] = { entry.item .. "()", type_highlight[entry.item_kind] }
+    end
+
+    if entry.arg then
+      columns[#columns + 1] = { "#" .. entry.arg, type_highlight[entry.kind] }
     end
 
     return displayer(columns)
@@ -93,7 +99,7 @@ function M.gen_entry(opts)
 
     do
       ---@type string
-      local protocol, interface, item = "", "", ""
+      local protocol, interface, item, arg = "", "", "", ""
 
       if entry.protocol then
         protocol = string.format("@%s=%s", entry.kind, entry.protocol)
@@ -104,8 +110,11 @@ function M.gen_entry(opts)
       if entry.item then
         item = string.format(".%s()", entry.item)
       end
+      if entry.arg then
+        arg = string.format("#%s()", entry.arg)
+      end
 
-      entry.ordinal = protocol .. interface .. item
+      entry.ordinal = protocol .. interface .. item .. arg
     end
 
     entry.display = display
@@ -120,6 +129,7 @@ end
 ---| "enum"
 ---| "request"
 ---| "event"
+---| "arg"
 
 ---@alias telescope-wayland.entry.item_kind
 ---| "enum"
@@ -133,6 +143,7 @@ end
 ---
 ---@field item_kind telescope-wayland.entry.item_kind?
 ---@field item      string?
+---@field arg       string?
 ---
 ---@field filename  string?
 ---@field range     Range4?
@@ -189,6 +200,8 @@ function M.collect_results(source, filename, cb)
     event_name_val = 1,
     enum = 1,
     enum_name_val = 1,
+    arg = 1,
+    arg_name_val = 1,
   }
 
   vim
@@ -203,6 +216,8 @@ function M.collect_results(source, filename, cb)
 
   ---@type string?, string?
   local protocol, interface
+  ---@type telescope-wayland.entry.item_kind?, string?
+  local item_kind, item
   for _, match, metadata in query:iter_matches(root, source) do
     local kind = metadata.kind --[[@as telescope-wayland.entry.kind ]]
 
@@ -220,13 +235,15 @@ function M.collect_results(source, filename, cb)
       return text, { row_s, col_s, row_e, col_e }
     end
 
-    ---@type string, telescope-wayland.entry.item_kind, Range4
-    local item, item_kind, range
+    ---@type Range4, string?
+    local range, arg
     if kind == "protocol" then
       protocol, range = get_node_text(captures.protocol_name_val)
       interface = nil
+      item_kind, item = nil, nil
     elseif kind == "interface" then
       interface, range = get_node_text(captures.interface_name_val)
+      item_kind, item = nil, nil
     elseif kind == "request" then
       item_kind = "request"
       item, range = get_node_text(captures.request_name_val)
@@ -236,6 +253,8 @@ function M.collect_results(source, filename, cb)
     elseif kind == "enum" then
       item_kind = "enum"
       item, range = get_node_text(captures.enum_name_val)
+    elseif kind == "arg" then
+      arg, range = get_node_text(captures.arg_name_val)
     else
       error("invalid match")
     end
@@ -249,6 +268,7 @@ function M.collect_results(source, filename, cb)
 
         item_kind = item_kind,
         item = item,
+        arg = arg,
 
         filename = filename,
         range = range,
